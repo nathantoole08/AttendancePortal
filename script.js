@@ -102,61 +102,138 @@ document.addEventListener('click', function (e) {
     }
 });
 
+// --- FIREBASE INITIALIZATION ---
+const firebaseConfig = {
+    apiKey: "AIzaSyDoIIfPL7Zf30ap1b_qdpY0ktVrFApiLmg",
+    authDomain: "attendanceportal-3b6e3.firebaseapp.com",
+    projectId: "attendanceportal-3b6e3",
+    storageBucket: "attendanceportal-3b6e3.firebasestorage.app",
+    messagingSenderId: "251041246418",
+    appId: "1:251041246418:web:7d39f86a6f15a96526d10b",
+    measurementId: "G-YWZ1CWTE1Y"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+// -------------------------------
+
 // State
-let attendanceData = JSON.parse(localStorage.getItem('attendance_data')) || [];
-let activeSessions = JSON.parse(localStorage.getItem('active_sessions')) || [];
-let systemMembers = JSON.parse(localStorage.getItem('system_members')) || [];
-// Migrate old string array to object array if needed
-if (systemMembers.length > 0 && typeof systemMembers[0] === 'string') {
-    systemMembers = systemMembers.map(name => ({ name, type: 'member' }));
-    localStorage.setItem('system_members', JSON.stringify(systemMembers));
-}
-let welcomeMessage = localStorage.getItem('welcome_message') || '';
-let selectedTimezone = localStorage.getItem('selected_timezone') || 'Australia/Melbourne';
-let autoSignOutConfig = JSON.parse(localStorage.getItem('auto_signout_config')) || { enabled: false, time: "23:00" };
-
-// Migrate legacy configs to new unified scheduleRules engine
-let scheduleRules = JSON.parse(localStorage.getItem('schedule_rules'));
-if (!scheduleRules) {
-    scheduleRules = [];
-    let oldTrainingConfig = JSON.parse(localStorage.getItem('training_config')) || { day: "3", start: "18:30", end: "21:30" };
-    scheduleRules.push({
-        id: Date.now().toString(),
-        mode: 'recurring',
-        type: 'include',
-        day: oldTrainingConfig.day,
-        start: oldTrainingConfig.start,
-        end: oldTrainingConfig.end
-    });
-
-    let oldExceptions = JSON.parse(localStorage.getItem('training_exceptions')) || [];
-    oldExceptions.forEach((ex, idx) => {
-        scheduleRules.push({
-            id: (Date.now() + idx + 1).toString(),
-            mode: 'specific',
-            type: ex.type,
-            date: ex.date,
-            start: ex.start || "18:30",
-            end: ex.end || "21:30"
-        });
-    });
-    localStorage.setItem('schedule_rules', JSON.stringify(scheduleRules));
-}
-let lastAutoSignoutDate = localStorage.getItem('last_auto_signout_date') || '';
+let attendanceData = [];
+let activeSessions = [];
+let systemMembers = [];
+let welcomeMessage = '';
+let selectedTimezone = 'Australia/Melbourne';
+let autoSignOutConfig = { enabled: false, time: "23:00" };
+let scheduleRules = [];
+let lastAutoSignoutDate = '';
 let currentPin = '';
-const ADMIN_PIN = '0000';
+let ADMIN_PIN = '0000';
 let isAdminUnlocked = false;
+
+// --- FIREBASE SYNC HELPERS ---
+function saveSettingsToCloud() {
+    if (!auth.currentUser) return;
+    db.collection('stations').doc(auth.currentUser.uid).set({
+        welcomeMessage,
+        selectedTimezone,
+        autoSignOutConfig,
+        lastAutoSignoutDate,
+        adminPin: ADMIN_PIN
+    }, { merge: true });
+}
+
+function saveSystemMembersToCloud() {
+    if (!auth.currentUser) return;
+    db.collection('stations').doc(auth.currentUser.uid).collection('data').doc('members').set({ array: systemMembers });
+}
+
+function saveActiveSessionsToCloud() {
+    if (!auth.currentUser) return;
+    db.collection('stations').doc(auth.currentUser.uid).collection('data').doc('activeSessions').set({ array: activeSessions });
+}
+
+function saveAttendanceDataToCloud() {
+    if (!auth.currentUser) return;
+    db.collection('stations').doc(auth.currentUser.uid).collection('data').doc('attendanceHistory').set({ array: attendanceData });
+}
+
+function saveScheduleRulesToCloud() {
+    if (!auth.currentUser) return;
+    db.collection('stations').doc(auth.currentUser.uid).collection('data').doc('scheduleRules').set({ array: scheduleRules });
+}
+
+let unsubscribes = [];
+function attachCloudListeners(uid) {
+    unsubscribes.forEach(unsub => unsub());
+    unsubscribes = [];
+
+    const stationRef = db.collection('stations').doc(uid);
+    const dataRef = stationRef.collection('data');
+
+    // Settings Listener
+    unsubscribes.push(stationRef.onSnapshot(doc => {
+        if (doc.exists) {
+            const data = doc.data();
+            welcomeMessage = data.welcomeMessage || '';
+            selectedTimezone = data.selectedTimezone || 'Australia/Melbourne';
+            autoSignOutConfig = data.autoSignOutConfig || { enabled: false, time: "23:00" };
+            lastAutoSignoutDate = data.lastAutoSignoutDate || '';
+            ADMIN_PIN = data.adminPin || '0000';
+
+            welcomeMsgInput.value = welcomeMessage;
+            timezoneSelect.value = selectedTimezone;
+            autoSignOutToggle.checked = autoSignOutConfig.enabled;
+            if (autoSignOutTime) autoSignOutTime.value = autoSignOutConfig.time;
+
+            updateClock();
+        } else {
+            saveSettingsToCloud();
+        }
+    }));
+
+    // Data Listeners
+    unsubscribes.push(dataRef.doc('members').onSnapshot(doc => {
+        systemMembers = doc.exists ? doc.data().array : [];
+        renderMembersList();
+        updateSuggestions();
+    }));
+
+    unsubscribes.push(dataRef.doc('activeSessions').onSnapshot(doc => {
+        activeSessions = doc.exists ? doc.data().array : [];
+        renderActiveSessions();
+    }));
+
+    unsubscribes.push(dataRef.doc('attendanceHistory').onSnapshot(doc => {
+        attendanceData = doc.exists ? doc.data().array : [];
+        renderAttendance();
+    }));
+
+    unsubscribes.push(dataRef.doc('scheduleRules').onSnapshot(doc => {
+        scheduleRules = doc.exists ? doc.data().array : [];
+        renderRules();
+    }));
+}
+// -----------------------------
 
 // Initialize
 function init() {
-    // Check for session authentication
-    if (sessionStorage.getItem('is_authenticated') === 'true') {
-        loginView.classList.add('hidden');
-        mainView.classList.remove('hidden');
-    } else {
-        loginView.classList.remove('hidden');
-        mainView.classList.add('hidden');
-    }
+    // Check for session authentication via Firebase
+    auth.onAuthStateChanged((user) => {
+        if (user) {
+            // User is signed in.
+            loginView.classList.add('hidden');
+            mainView.classList.remove('hidden');
+            attachCloudListeners(user.uid);
+        } else {
+            // User is signed out.
+            loginView.classList.remove('hidden');
+            mainView.classList.add('hidden');
+            // Unsubscribe listeners when logged out
+            unsubscribes.forEach(unsub => unsub());
+            unsubscribes = [];
+        }
+    });
 
     updateClock();
     setInterval(updateClock, 1000);
@@ -242,20 +319,21 @@ function handleLogin() {
     const email = loginEmailInput.value.trim();
     const password = loginPasswordInput.value.trim();
 
-    // Hardcoded credentials as requested
-    if (email === 'craigieburn@ses.vic.gov.au' && password === 'Craigieburn3064') {
-        sessionStorage.setItem('is_authenticated', 'true');
-        loginView.classList.add('hidden');
-        mainView.classList.remove('hidden');
-        loginError.classList.add('hidden');
-    } else {
-        loginError.classList.remove('hidden');
-    }
+    auth.signInWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+            // Login successful. The onAuthStateChanged listener will handle the UI switch.
+            loginError.classList.add('hidden');
+        })
+        .catch((error) => {
+            console.error("Login failed:", error);
+            loginError.classList.remove('hidden');
+        });
 }
 
 function handleLogout() {
-    sessionStorage.removeItem('is_authenticated');
-    location.reload();
+    auth.signOut().then(() => {
+        location.reload();
+    });
 }
 
 // Clock & Timers logic
@@ -352,7 +430,7 @@ function handleSignIn() {
     };
 
     activeSessions.push(newSession);
-    localStorage.setItem('active_sessions', JSON.stringify(activeSessions));
+    saveActiveSessionsToCloud();
 
     // Check if the member already exists in the system
     const existingMember = systemMembers.find(m => m.name.toLowerCase() === name.toLowerCase());
@@ -362,7 +440,7 @@ function handleSignIn() {
         if (existingMember.status === 'archived') {
             existingMember.status = 'active';
             existingMember.role = 'guest'; // Auto-reactivated as a Guest
-            localStorage.setItem('system_members', JSON.stringify(systemMembers));
+            saveSystemMembersToCloud();
             populateMemberFilter();
             if (typeof renderMembers === 'function') renderMembers();
 
@@ -385,7 +463,7 @@ function handleSignIn() {
             createdAt: Date.now()
         });
         systemMembers.sort((a, b) => a.name.localeCompare(b.name));
-        localStorage.setItem('system_members', JSON.stringify(systemMembers));
+        saveSystemMembersToCloud();
         populateMemberFilter();
         if (typeof renderMembers === 'function') renderMembers();
     }
@@ -412,10 +490,10 @@ function handleSignOut(id) {
     };
 
     attendanceData.unshift(completedSession);
-    localStorage.setItem('attendance_data', JSON.stringify(attendanceData));
+    saveAttendanceDataToCloud();
 
     activeSessions.splice(sessionIndex, 1);
-    localStorage.setItem('active_sessions', JSON.stringify(activeSessions));
+    saveActiveSessionsToCloud();
 
     renderActiveSessions();
     renderAttendance();
@@ -610,7 +688,7 @@ function saveSettings() {
     // Reset today's trigger flag if the time fundamentally changed so they can test/execute it immediately
     if (autoSignOutTime.value !== (autoSignOutConfig.time || '')) {
         lastAutoSignoutDate = '';
-        localStorage.removeItem('last_auto_signout_date');
+        saveSettingsToCloud();
     }
 
     autoSignOutConfig = {
@@ -618,9 +696,9 @@ function saveSettings() {
         time: autoSignOutTime.value
     };
 
-    localStorage.setItem('welcome_message', welcomeMessage);
-    localStorage.setItem('selected_timezone', selectedTimezone);
-    localStorage.setItem('auto_signout_config', JSON.stringify(autoSignOutConfig));
+    saveSettingsToCloud();
+    saveSettingsToCloud();
+    saveSettingsToCloud();
 
     updateClock();
     // alert('Settings saved successfully!'); // Removed for auto-save
@@ -662,7 +740,7 @@ function checkAutoSignOut() {
         }
         // Mark as triggered so anyone signing in natively AFTER the cutoff isn't instantly kicked out
         lastAutoSignoutDate = dateKey;
-        localStorage.setItem('last_auto_signout_date', lastAutoSignoutDate);
+        saveSettingsToCloud();
     }
 
     // Safety fallback: Cross-day sleepers (if browser was asleep for days and wakes up before cfg time)
@@ -776,7 +854,7 @@ function addMember() {
     }
 
     systemMembers.sort((a, b) => a.name.localeCompare(b.name));
-    localStorage.setItem('system_members', JSON.stringify(systemMembers));
+    saveSystemMembersToCloud();
     memberInput.value = '';
     renderMembers();
     populateMemberFilter();
@@ -786,7 +864,7 @@ function removeMember(name) {
     const member = systemMembers.find(m => m.name === name);
     if (member) {
         member.status = 'archived'; // Archive instead of delete
-        localStorage.setItem('system_members', JSON.stringify(systemMembers));
+        saveSystemMembersToCloud();
         renderMembers();
         populateMemberFilter();
     }
@@ -797,7 +875,7 @@ function reactivateMember(name) {
     if (member) {
         member.status = 'active';
         member.role = 'guest'; // Defaults to guest upon reactivation
-        localStorage.setItem('system_members', JSON.stringify(systemMembers));
+        saveSystemMembersToCloud();
         renderMembers();
         populateMemberFilter();
         alert(`${name} has been reactivated as a Guest.`);
@@ -867,9 +945,9 @@ function editMemberName(oldName) {
 
             // Save all updated data
             systemMembers.sort((a, b) => a.name.localeCompare(b.name));
-            localStorage.setItem('system_members', JSON.stringify(systemMembers));
-            localStorage.setItem('attendance_data', JSON.stringify(attendanceData));
-            localStorage.setItem('active_sessions', JSON.stringify(activeSessions));
+            saveSystemMembersToCloud();
+            saveAttendanceDataToCloud();
+            saveActiveSessionsToCloud();
 
             // Re-render everything to reflect changes
             renderMembers();
@@ -960,7 +1038,7 @@ function updateMemberType(name, newRole) {
     if (member) {
         member.role = newRole;
         member.type = newRole; // Legacy fallback
-        localStorage.setItem('system_members', JSON.stringify(systemMembers));
+        saveSystemMembersToCloud();
         renderMembers();
         populateMemberFilter();
     }
@@ -1001,7 +1079,7 @@ function syncHistoricalMembers() {
 
     if (changed) {
         systemMembers.sort((a, b) => a.name.localeCompare(b.name));
-        localStorage.setItem('system_members', JSON.stringify(systemMembers));
+        saveSystemMembersToCloud();
     }
 }
 
@@ -1113,7 +1191,7 @@ window.addScheduleRule = function () {
     }
 
     scheduleRules.push(rule);
-    localStorage.setItem('schedule_rules', JSON.stringify(scheduleRules));
+    saveScheduleRulesToCloud();
     renderRules();
 };
 
@@ -1130,7 +1208,7 @@ window.removeRule = function (id) {
             openDeleteRuleModal(id);
             return; // Exit early to wait for modal confirmation
         }
-        localStorage.setItem('schedule_rules', JSON.stringify(scheduleRules));
+        saveScheduleRulesToCloud();
         renderRules();
     }
 };
@@ -1183,7 +1261,7 @@ window.executeDeleteRule = function () {
     const ruleIndex = scheduleRules.findIndex(r => r.id === ruleToDelete);
     if (ruleIndex > -1) {
         scheduleRules.splice(ruleIndex, 1);
-        localStorage.setItem('schedule_rules', JSON.stringify(scheduleRules));
+        saveScheduleRulesToCloud();
         renderRules();
     }
     closeDeleteRuleModal();
@@ -1194,7 +1272,7 @@ window.updateMemberType = function (name, newType) {
     if (member) {
         member.type = newType;
         member.role = newType;
-        localStorage.setItem('system_members', JSON.stringify(systemMembers));
+        saveSystemMembersToCloud();
         populateMemberFilter();
         renderMembers(); // Re-render to apply class updates
     }
