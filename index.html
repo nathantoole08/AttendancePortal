@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AttendancePortal | VICSES Training Tracker</title>
+    <meta name="description" content="Official VICSES Training Attendance Portal. Sign in and out with ease.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="vicses-checker-strip"></div>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <!-- Login Landing Page -->
+    <div id="loginView" class="login-view">
+        <div class="login-card glass-card">
+            <div class="login-header">
+                <img src="assets/vicses-logo.png" alt="VICSES Logo" class="login-logo">
+                <h2>Attendance<span>Portal</span></h2>
+                <p>Sign in to access the attendance portal</p>
+            </div>
+            <div class="login-form">
+                <div class="input-group">
+                    <label for="loginEmail">Email Address</label>
+                    <input type="email" id="loginEmail" placeholder="Enter your email" autocomplete="email">
+                </div>
+                <div class="input-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" placeholder="Enter your password">
+                </div>
+                <div id="loginError" class="error-msg hidden">Invalid email or password</div>
+                <button id="loginBtn" class="action-btn sign-in">
+                    Login to Portal
+                </button>
+                <div class="login-footer" style="text-align: center;">
+                    <p>&copy; 2026 AttendancePortal.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <main class="app-container hidden" id="mainView">
+        <header class="header">
+            <div class="logo">
+                <img src="assets/vicses-logo.png" alt="VICSES Logo" class="logo-img">
+                <h1>Attendance<span>Portal</span></h1>
+            </div>
+            <div class="header-profile" id="profileBtn" title="View Profile">
+                <span class="profile-name">Craigieburn</span>
+                <div class="profile-icon">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                    </svg>
+                </div>
+            </div>
+        </header>
+
+        <section class="clock-section">
+            <div class="glass-card clock-card">
+                <div class="current-date-large" id="currentDate">-- --- ----</div>
+                <div class="time-display" id="currentTime">00:00:00</div>
+                <div class="session-status" id="sessionStatus">Welcome to SES Craigieburn Unit</div>
+            </div>
+        </section>
+
+        <section class="actions-section">
+            <div class="glass-card sign-in-card">
+                <div class="input-group">
+                    <label for="fullName">Full Name</label>
+                    <div class="input-container">
+                        <input type="text" id="fullName" placeholder="Enter full name" autocomplete="off">
+                        <div id="suggestionsList" class="suggestions-list hidden"></div>
+                    </div>
+                </div>
+                <div id="signInError" class="error-msg hidden">Already signed in</div>
+                <button id="signInBtn" class="action-btn sign-in">
+                    <span class="btn-icon">➜</span>
+                    <span class="btn-text">Sign In</span>
+                </button>
+            </div>
+        </section>
+
+        <section class="active-sessions-section">
+            <div class="section-header">
+                <h2>Currently signed in</h2>
+                <span class="badge" id="activeCount">0</span>
+            </div>
+            <div id="activeSessionsList" class="active-grid">
+                <!-- Active users will appear here -->
+            </div>
+            <div id="noActive" class="empty-state">No one is currently signed in.</div>
+        </section>
+
+        <!-- Admin Lock Button -->
+        <button id="adminLockBtn" class="admin-lock-btn">
+            <span>🔒</span>
+        </button>
+
+        <footer class="footer">
+            <p>&copy; 2026 AttendancePortal. Data saved locally in your browser.</p>
+        </footer>
+    </main>
+
+    <!-- Admin Section (Full Page View) -->
+    <div class="admin-view hidden" id="adminView">
+        <div class="admin-container">
+            <header class="admin-header">
+                <div class="logo">
+                    <img src="assets/vicses-logo.png" alt="VICSES Logo" class="logo-img">
+                    <h1>Admin<span>Dashboard</span></h1>
+                </div>
+                <button onclick="lockAdmin()" class="secondary-btn">Close Admin</button>
+            </header>
+
+            <div class="glass-card admin-card-container">
+                <div class="admin-tabs">
+                    <button class="tab-btn active" data-tab="settings">Settings</button>
+                    <button class="tab-btn" data-tab="members">Manage Members</button>
+                    <button class="tab-btn" data-tab="attendance">Recent Attendance</button>
+                    <button class="tab-btn" data-tab="reports">Reports</button>
+                </div>
+
+                <div class="admin-tab-content active" id="tab-settings">
+                    <div class="card-header">
+                        <h2>Settings</h2>
+                    </div>
+                    <div class="settings-grid">
+                        <div class="settings-column">
+                            <div class="input-group">
+                                <label for="welcomeMsgInput">Welcome Message</label>
+                                <input type="text" id="welcomeMsgInput" maxlength="40"
+                                    placeholder="e.g. Welcome to VICSES">
+                                <small class="char-limit">Max 40 characters</small>
+                            </div>
+                            <div class="input-group">
+                                <label for="timezoneSelect">Timezone</label>
+                                <select id="timezoneSelect" class="timezone-select">
+                                    <!-- Populated via JS -->
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="settings-column">
+                            <div class="input-group">
+                                <label>Manage Training Schedule</label>
+                                <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1rem;">
+                                    Add recurring training days or specific date exceptions to calculate Training
+                                    %.
+                                </p>
+                                <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;">
+                                    <div style="display: flex; gap: 0.5rem; align-items: flex-end;">
+                                        <div class="filter-group"
+                                            style="margin-top: 0; margin-bottom: 0.5rem; flex: 1;">
+                                            <label>Type</label>
+                                            <select id="ruleModeSelect" class="standard-select"
+                                                onchange="toggleRuleInputMode()">
+                                                <option value="recurring">Recurring Day</option>
+                                                <option value="specific">Specific Date</option>
+                                            </select>
+                                        </div>
+                                        <div class="filter-group"
+                                            style="margin-top: 0; margin-bottom: 0.5rem; flex: 1;">
+                                            <label>Target Members</label>
+                                            <div class="multi-select-container" id="ruleTargetContainer">
+                                                <button type="button" class="multi-select-btn" id="ruleTargetBtn"
+                                                    onclick="document.getElementById('ruleTargetDropdown').classList.toggle('open')">All
+                                                    members</button>
+                                                <div class="multi-select-dropdown" id="ruleTargetDropdown">
+                                                    <!-- Dynamically populated checkboxes -->
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; gap: 0.5rem; align-items: stretch;">
+                                        <select id="ruleDaySelect" class="standard-select" style="flex: 1;">
+                                            <option value="1">Monday</option>
+                                            <option value="2">Tuesday</option>
+                                            <option value="3" selected>Wednesday</option>
+                                            <option value="4">Thursday</option>
+                                            <option value="5">Friday</option>
+                                            <option value="6">Saturday</option>
+                                            <option value="0">Sunday</option>
+                                        </select>
+                                        <input type="date" id="ruleDateInput"
+                                            style="flex: 1; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(255, 255, 255, 0.05); color: white; display: none;">
+
+                                        <select id="ruleTypeSelect" class="standard-select" style="flex: 1;">
+                                            <option value="include">Include</option>
+                                            <option value="exclude">Exclude</option>
+                                        </select>
+                                    </div>
+                                    <div class="time-selector-row" style="margin-top: 0;">
+                                        <div class="time-field">
+                                            <span class="time-label">Start</span>
+                                            <input type="time" id="ruleStart" value="18:30">
+                                        </div>
+                                        <div class="time-field">
+                                            <span class="time-label">End</span>
+                                            <input type="time" id="ruleEnd" value="21:30">
+                                        </div>
+                                    </div>
+                                    <button class="action-btn sign-in" onclick="addScheduleRule()"
+                                        style="width: 100%; padding: 0.75rem; margin-top: 0.5rem;">+ Add
+                                        Rule</button>
+                                </div>
+                                <div style="margin-bottom: 0.75rem;">
+                                    <select id="ruleStatusFilter" class="standard-select" onchange="renderRules()">
+                                        <option value="active" selected>Active Rules</option>
+                                        <option value="archived">Archived Rules</option>
+                                    </select>
+                                </div>
+                                <div id="rulesList" class="members-list"
+                                    style="max-height: 250px; overflow-y: auto; padding: 0;">
+                                    <!-- Populated via JS -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-column">
+                            <div class="input-group">
+                                <label>Auto Sign-out</label>
+                                <div class="training-fields">
+                                    <div
+                                        style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                                        <span style="font-size: 0.875rem; font-weight: 600;">Enable Feature</span>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" id="autoSignOutToggle">
+                                            <span class="slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="time-selector-row">
+                                        <div class="time-field" style="width: 100%;">
+                                            <span class="time-label">Sign out everyone daily at</span>
+                                            <input type="time" id="autoSignOutTime" value="23:00">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-tab-content" id="tab-members">
+                    <div class="card-header">
+                        <h2 style="white-space: nowrap;">Manage Members</h2>
+                        <p style="font-size: 0.875rem; color: var(--text-muted); line-height: 1.4;">
+                            <strong>Members</strong> are included in training reports.<br>
+                            <strong>Guests</strong> are tracked for attendance only.
+                        </p>
+                    </div>
+
+                    <!-- V32: Dual Dropdown Filtering & Addition -->
+                    <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">
+                        <select id="memberStatusSelect" class="standard-select" style="flex: 1;"
+                            onchange="renderMembers()">
+                            <option value="active" selected>Active</option>
+                            <option value="archived">Archived</option>
+                        </select>
+                        <select id="memberRoleSelect" class="standard-select" style="flex: 1;"
+                            onchange="renderMembers()">
+                            <option value="member" selected>Members</option>
+                            <option value="guest">Guests</option>
+                        </select>
+                    </div>
+
+                    <div id="addMemberFormContainer" class="members-input-group"
+                        style="margin-top: 0; margin-bottom: 0;">
+                        <input type="text" id="memberInput" placeholder="Enter first and last name">
+                        <button id="addMemberBtn" class="action-btn sign-in"
+                            style="width: auto; padding: 0.75rem 1.5rem;">+ Add Profile</button>
+                    </div>
+                    <div id="addMemberError" class="error-msg"
+                        style="display: none; margin-top: 0.5rem; margin-bottom: 1.5rem;"></div>
+
+                    <div id="membersList" class="members-list-container">
+                        <!-- Members will be listed here -->
+                    </div>
+                </div>
+
+                <div class="admin-tab-content" id="tab-attendance">
+                    <div class="card-header">
+                        <h2>Recent Attendance</h2>
+                        <p style="font-size: 0.875rem; color: var(--text-muted);">
+                            Showing attendance records for the last <strong>24 hours</strong>.
+                        </p>
+                    </div>
+                    <div class="table-container scrollable-table">
+                        <table id="historyTable">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Date</th>
+                                    <th>Sign In</th>
+                                    <th>Sign Out</th>
+                                    <th>Duration</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyBody"></tbody>
+                        </table>
+                    </div>
+                    <div id="noData" class="empty-state">No attendance records yet.</div>
+                </div>
+
+                <div class="admin-tab-content" id="tab-reports">
+                    <div class="card-header">
+                        <h2>Attendance Reports</h2>
+                    </div>
+                    <div class="reports-controls" style="display: flex; flex-direction: column; gap: 1rem;">
+                        <!-- Row 1 -->
+                        <div style="display: flex; gap: 1rem; width: 100%;">
+                            <div class="filter-group" style="flex: 1; margin: 0;">
+                                <label>Report Type</label>
+                                <select id="reportType" class="standard-select" onchange="toggleReportFilters()">
+                                    <option value="general">Attendance</option>
+                                    <option value="training" id="trainingReportOption">Training %</option>
+                                </select>
+                            </div>
+                            <div class="filter-group" style="flex: 2; margin: 0;">
+                                <label>Date Range</label>
+                                <div class="date-inputs" style="display: flex; gap: 0.5rem; flex: 1;">
+                                    <input type="date" id="reportStart" class="standard-select" style="flex: 1;">
+                                    <input type="date" id="reportEnd" class="standard-select" style="flex: 1;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Row 2 -->
+                        <div style="display: flex; gap: 1rem; width: 100%; align-items: flex-end;">
+                            <div class="filter-group" id="reportStatusGroup" style="flex: 1; margin: 0;">
+                                <label>Filter Profile Status</label>
+                                <select id="reportStatusFilter" class="standard-select"
+                                    onchange="populateReportTargetMembers()">
+                                    <option value="active" selected>Active profiles</option>
+                                    <option value="archived">Archived profiles</option>
+                                    <option value="all">All profiles</option>
+                                </select>
+                            </div>
+                            <div class="filter-group" id="reportMemberGroup" style="flex: 1; margin: 0;">
+                                <label>Select Person</label>
+                                <div class="multi-select-container" id="reportMemberContainer">
+                                    <button type="button" class="multi-select-btn" id="reportMemberBtn"
+                                        onclick="document.getElementById('reportMemberDropdown').classList.toggle('open')">All
+                                        in category</button>
+                                    <div class="multi-select-dropdown" id="reportMemberDropdown">
+                                        <!-- Dynamically populated checkboxes -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Row 3 (Actions) -->
+                        <div class="report-actions"
+                            style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; width: 100%;">
+                            <button id="generateReportBtn" class="action-btn sign-in"
+                                style="width: 100%; padding: 0.75rem 1.5rem;">View Report</button>
+                            <button id="exportReportBtn" class="secondary-btn"
+                                style="width: 100%; padding: 0.75rem 1.5rem;">Export CSV</button>
+                        </div>
+                    </div>
+                    <div id="reportResult" class="table-container scrollable-table hidden">
+                        <table id="reportTable">
+                            <thead id="reportTableHeader">
+                                <!-- Injected via JS -->
+                            </thead>
+                            <tbody id="reportTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div> <!-- Close admin-view properly -->
+
+    <!-- Admin PIN Overlay -->
+    <div id="adminOverlay" class="admin-overlay">
+        <div class="pin-container">
+            <div class="pin-header">
+                <h3>Admin Access</h3>
+                <p>Enter 4-digit PIN</p>
+            </div>
+            <div class="pin-display" id="pinDisplay">****</div>
+            <div class="pin-grid">
+                <button class="pin-btn" onclick="appendPin('1')">1</button>
+                <button class="pin-btn" onclick="appendPin('2')">2</button>
+                <button class="pin-btn" onclick="appendPin('3')">3</button>
+                <button class="pin-btn" onclick="appendPin('4')">4</button>
+                <button class="pin-btn" onclick="appendPin('5')">5</button>
+                <button class="pin-btn" onclick="appendPin('6')">6</button>
+                <button class="pin-btn" onclick="appendPin('7')">7</button>
+                <button class="pin-btn" onclick="appendPin('8')">8</button>
+                <button class="pin-btn" onclick="appendPin('9')">9</button>
+                <button class="pin-btn" onclick="clearPin()">C</button>
+                <button class="pin-btn" onclick="appendPin('0')">0</button>
+                <button class="pin-btn" onclick="closeAdmin()">✖</button>
+            </div>
+        </div>
+    </div>
+    <!-- Rule Deletion Warning Overlay -->
+    <div id="deleteRuleOverlay" class="admin-overlay" style="display: none;">
+        <div class="pin-container profile-card" style="text-align: center;">
+            <div class="pin-header" style="justify-content: center; margin-bottom: 1rem;">
+                <h3 style="color: var(--danger);">⚠️ Permanent Deletion</h3>
+            </div>
+            <p style="color: var(--text-main); margin-bottom: 2rem;">
+                Are you sure you want to permanently delete this rule from historical records? This cannot be undone.
+            </p>
+            <div style="display: flex; gap: 1rem; width: 100%;">
+                <button class="action-btn sign-in" onclick="executeDeleteRule()"
+                    style="background-color: var(--danger); flex: 1;">Delete</button>
+                <button class="secondary-btn" onclick="closeDeleteRuleModal()" style="flex: 1;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Settings Overlay -->
+    <div id="profileOverlay" class="admin-overlay">
+        <div class="pin-container profile-card">
+            <div class="pin-header">
+                <div class="profile-avatar-large">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                    </svg>
+                </div>
+                <h3>Profile Settings</h3>
+            </div>
+            <div class="profile-details-list">
+                <div class="detail-row">
+                    <label>Profile Name</label>
+                    <div class="detail-value">Craigieburn</div>
+                </div>
+                <div class="detail-row">
+                    <label>Admin Email</label>
+                    <div class="detail-value">craigieburn@ses.vic.gov.au</div>
+                </div>
+                <button class="action-btn sign-in" id="passwordResetBtn" style="margin-top: 1rem;">
+                    Change Password
+                </button>
+                <div id="resetStatus" class="success-msg hidden">Reset link sent to craigieburn@ses.vic.gov.au</div>
+
+                <button class="action-btn logout-btn" id="logoutBtn" style="margin-top: 1rem;">
+                    Logout of Portal
+                </button>
+            </div>
+            <button class="pin-btn close-btn" onclick="closeProfile()">✖</button>
+        </div>
+    </div>
+
+    <script src="script.js?v=47"></script>
+</body>
+
+</html>
