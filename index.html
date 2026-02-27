@@ -51,6 +51,11 @@
     </div>
 
     <main class="app-container hidden" id="mainView">
+        <!-- Toast Notification (Hidden by default) -->
+        <div id="toastNotification" class="toast-notification hidden">
+            <span id="toastMessage"></span>
+        </div>
+
         <header class="header">
             <div class="logo">
                 <img src="assets/vicses-logo.png" alt="VICSES Logo" class="logo-img">
@@ -85,10 +90,16 @@
                     </div>
                 </div>
                 <div id="signInError" class="error-msg hidden">Already signed in</div>
-                <button id="signInBtn" class="action-btn sign-in">
-                    <span class="btn-icon">➜</span>
-                    <span class="btn-text">Sign In</span>
-                </button>
+                <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                    <button id="signInBtn" class="action-btn sign-in" style="flex: 1; margin-top: 0;">
+                        <span class="btn-icon">➜</span>
+                        <span class="btn-text">Sign In</span>
+                    </button>
+                    <button id="manualSignOutBtn" class="action-btn sign-out-manual hidden"
+                        style="flex: 1; margin-top: 0;">
+                        <span class="btn-text">Sign Out</span>
+                    </button>
+                </div>
             </div>
         </section>
 
@@ -100,6 +111,7 @@
             <div id="activeSessionsList" class="active-grid">
                 <!-- Active users will appear here -->
             </div>
+
             <div id="noActive" class="empty-state">No one is currently signed in.</div>
         </section>
 
@@ -109,7 +121,7 @@
         </button>
 
         <footer class="footer">
-            <p>&copy; 2026 AttendancePortal. Data saved locally in your browser.</p>
+            <p>&copy; 2026 AttendancePortal.</p>
         </footer>
     </main>
 
@@ -149,6 +161,20 @@
                                 <select id="timezoneSelect" class="timezone-select">
                                     <!-- Populated via JS -->
                                 </select>
+                            </div>
+                            <!-- Privacy Mode Toggle -->
+                            <div
+                                style="display: flex; align-items: center; justify-content: space-between; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--glass-border);">
+                                <div>
+                                    <span style="font-size: 0.875rem; font-weight: 600; display: block;">Privacy
+                                        Mode</span>
+                                    <span style="font-size: 0.75rem; color: var(--text-muted);">Hide active session
+                                        names</span>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="privacyModeToggle">
+                                    <span class="slider"></span>
+                                </label>
                             </div>
                         </div>
 
@@ -444,16 +470,66 @@
                     <label>Admin Email</label>
                     <div class="detail-value">craigieburn@ses.vic.gov.au</div>
                 </div>
-                <button class="action-btn sign-in" id="passwordResetBtn" style="margin-top: 1rem;">
-                    Change Password
+                <button class="action-btn sign-in" id="changePinBtn" style="margin-top: 1rem;">
+                    Change Admin Pin
                 </button>
-                <div id="resetStatus" class="success-msg hidden">Reset link sent to craigieburn@ses.vic.gov.au</div>
+                <div id="resetStatus" class="success-msg hidden"></div>
 
                 <button class="action-btn logout-btn" id="logoutBtn" style="margin-top: 1rem;">
                     Logout of Portal
                 </button>
             </div>
             <button class="pin-btn close-btn" onclick="closeProfile()">✖</button>
+        </div>
+    </div>
+
+    <!-- Admin PIN Change Multi-Step Modal -->
+    <div class="admin-overlay hidden" id="changePinOverlay">
+        <div class="admin-auth-card">
+
+            <div id="pinStep1" class="pin-step">
+                <h2>Verify Password</h2>
+                <p>Please enter your portal login password to change the admin pin.</p>
+                <div class="input-group" style="margin-top: 1rem;">
+                    <input type="password" id="pinAuthPassword" placeholder="Current Password">
+                </div>
+                <div id="pinAuthError" class="error-msg hidden" style="margin-bottom: 1rem;">Invalid Password</div>
+                <button class="action-btn sign-in" id="submitPinAuthBtn" style="margin-top: 1rem;">Verify &
+                    Continue</button>
+            </div>
+
+            <div id="pinStep2" class="pin-step hidden">
+                <h2>New Admin PIN</h2>
+                <p>Enter a secure 4-digit PIN.</p>
+                <div class="input-group" style="margin-top: 1rem;">
+                    <input type="password" id="newAdminPin" placeholder="4-Digit PIN" maxlength="4" inputmode="numeric">
+                </div>
+                <div id="newPinError" class="error-msg hidden" style="margin-bottom: 1rem;">PIN must be exactly 4
+                    digits.</div>
+                <button class="action-btn sign-in" id="submitNewPinBtn" style="margin-top: 1rem;">Next Steps</button>
+            </div>
+
+            <div id="pinStep3" class="pin-step hidden">
+                <h2>Confirm New PIN</h2>
+                <p>Please re-enter the newly created PIN.</p>
+                <div class="input-group" style="margin-top: 1rem;">
+                    <input type="password" id="confirmAdminPin" placeholder="Confirm 4-Digit PIN" maxlength="4"
+                        inputmode="numeric">
+                </div>
+                <div id="confirmPinError" class="error-msg hidden" style="margin-bottom: 1rem;">PINs do not match.</div>
+                <button class="action-btn sign-in" id="submitConfirmPinBtn" style="margin-top: 1rem;">Save
+                    Changes</button>
+            </div>
+
+            <div id="pinStep4" class="pin-step hidden" style="text-align: center;">
+                <h2>Changes Saved</h2>
+                <p style="color: var(--success); margin: 1.5rem 0;">New pin created and it will be the new pin for the
+                    admin portal.</p>
+                <button class="action-btn sign-in" id="finishPinBtn" style="margin-top: 1rem;">Return to
+                    Dashboard</button>
+            </div>
+
+            <button class="pin-btn close-btn" onclick="closeChangePinModal()">✖</button>
         </div>
     </div>
 
@@ -465,7 +541,15 @@
     <!-- UI Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
-    <script src="script.js?v=50"></script>
+    <script src="script.js?v=52"></script>
+
+    <!-- V52: Audio Feedback -->
+    <audio id="signInChime" preload="auto">
+        <source src="https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="signOutChime" preload="auto">
+        <source src="https://assets.mixkit.co/active_storage/sfx/2575/2575-preview.mp3" type="audio/mpeg">
+    </audio>
 </body>
 
 </html>

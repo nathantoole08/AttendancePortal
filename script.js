@@ -20,6 +20,18 @@ const loginPasswordInput = document.getElementById('loginPassword');
 const loginBtn = document.getElementById('loginBtn');
 const loginError = document.getElementById('loginError');
 const logoutBtn = document.getElementById('logoutBtn');
+const changePinBtn = document.getElementById('changePinBtn');
+const changePinOverlay = document.getElementById('changePinOverlay');
+const pinStep1 = document.getElementById('pinStep1');
+const pinStep2 = document.getElementById('pinStep2');
+const pinStep3 = document.getElementById('pinStep3');
+const pinStep4 = document.getElementById('pinStep4');
+const pinAuthPassword = document.getElementById('pinAuthPassword');
+const newAdminPin = document.getElementById('newAdminPin');
+const confirmAdminPin = document.getElementById('confirmAdminPin');
+const pinAuthError = document.getElementById('pinAuthError');
+const newPinError = document.getElementById('newPinError');
+const confirmPinError = document.getElementById('confirmPinError');
 
 // Admin Elements
 const tabBtns = document.querySelectorAll('.tab-btn');
@@ -47,6 +59,10 @@ const exportReportBtn = document.getElementById('exportReportBtn');
 const reportResult = document.getElementById('reportResult');
 const reportTableHeader = document.getElementById('reportTableHeader');
 const reportTableBody = document.getElementById('reportTableBody');
+
+// Privacy Mode Elements
+const privacyModeToggle = document.getElementById('privacyModeToggle');
+const manualSignOutBtn = document.getElementById('manualSignOutBtn');
 
 // V34 Custom Multi-Select logic
 window.updateMultiSelectBtnState = function (containerId) {
@@ -130,6 +146,7 @@ let lastAutoSignoutDate = '';
 let currentPin = '';
 let ADMIN_PIN = '0000';
 let isAdminUnlocked = false;
+let isPrivacyModeEnabled = false;
 
 // --- FIREBASE SYNC HELPERS ---
 function saveSettingsToCloud() {
@@ -139,7 +156,8 @@ function saveSettingsToCloud() {
         selectedTimezone,
         autoSignOutConfig,
         lastAutoSignoutDate,
-        adminPin: ADMIN_PIN
+        adminPin: ADMIN_PIN,
+        isPrivacyModeEnabled: isPrivacyModeEnabled
     }, { merge: true });
 }
 
@@ -180,10 +198,12 @@ function attachCloudListeners(uid) {
             autoSignOutConfig = data.autoSignOutConfig || { enabled: false, time: "23:00" };
             lastAutoSignoutDate = data.lastAutoSignoutDate || '';
             ADMIN_PIN = data.adminPin || '0000';
+            isPrivacyModeEnabled = data.isPrivacyModeEnabled || false;
 
             welcomeMsgInput.value = welcomeMessage;
             timezoneSelect.value = selectedTimezone;
             autoSignOutToggle.checked = autoSignOutConfig.enabled;
+            privacyModeToggle.checked = isPrivacyModeEnabled;
             if (autoSignOutTime) autoSignOutTime.value = autoSignOutConfig.time;
 
             updateClock();
@@ -194,9 +214,26 @@ function attachCloudListeners(uid) {
 
     // Data Listeners
     unsubscribes.push(dataRef.doc('members').onSnapshot(doc => {
-        systemMembers = doc.exists ? doc.data().array : [];
-        renderMembersList();
+        const rawMembers = doc.exists ? doc.data().array : [];
+        // V52: Sanitize legacy string entries into full data objects instantly
+        systemMembers = rawMembers.map(m => {
+            if (typeof m === 'string') {
+                return {
+                    name: m,
+                    role: 'member',
+                    type: 'member',
+                    status: 'active',
+                    createdAt: Date.now() - 31536000000 // Safely backdate standard 1 year
+                };
+            }
+            if (m && !m.name) m.name = 'Unknown User'; // Safety fallback
+            if (m && !m.role) m.role = m.type || 'member'; // Historical safety fallback
+            return m || { name: 'Unknown User', role: 'member', type: 'member', status: 'active', createdAt: Date.now() };
+        });
+
+        renderMembers();
         updateSuggestions();
+        populateMemberFilter();
     }));
 
     unsubscribes.push(dataRef.doc('activeSessions').onSnapshot(doc => {
@@ -243,6 +280,7 @@ function init() {
 
     // Event Listeners
     signInBtn.addEventListener('click', handleSignIn);
+    manualSignOutBtn.addEventListener('click', handleManualSignOut);
 
     // Tab switching
     tabBtns.forEach(btn => {
@@ -254,6 +292,7 @@ function init() {
     autoSignOutTime.addEventListener('change', saveSettings);
     welcomeMsgInput.addEventListener('change', saveSettings);
     timezoneSelect.addEventListener('change', saveSettings);
+    privacyModeToggle.addEventListener('change', saveSettings);
 
     addMemberBtn.addEventListener('click', addMember);
     generateReportBtn.addEventListener('click', generateReport);
@@ -308,10 +347,76 @@ function init() {
         profileOverlay.classList.add('visible');
     });
 
-    passwordResetBtn.addEventListener('click', () => {
-        resetStatus.classList.remove('hidden');
-        setTimeout(() => resetStatus.classList.add('hidden'), 5000);
+    changePinBtn.addEventListener('click', () => {
+        pinAuthPassword.value = '';
+        newAdminPin.value = '';
+        confirmAdminPin.value = '';
+        pinAuthError.classList.add('hidden');
+        newPinError.classList.add('hidden');
+        confirmPinError.classList.add('hidden');
+
+        pinStep1.classList.remove('hidden');
+        pinStep2.classList.add('hidden');
+        pinStep3.classList.add('hidden');
+        pinStep4.classList.add('hidden');
+
+        changePinOverlay.classList.remove('hidden');
+        setTimeout(() => changePinOverlay.classList.add('visible'), 10);
     });
+
+    document.getElementById('submitPinAuthBtn').addEventListener('click', () => {
+        const password = pinAuthPassword.value;
+        if (!password) {
+            pinAuthError.textContent = 'Please enter your password.';
+            pinAuthError.classList.remove('hidden');
+            return;
+        }
+
+        const credential = firebase.auth.EmailAuthProvider.credential(auth.currentUser.email, password);
+        auth.currentUser.reauthenticateWithCredential(credential)
+            .then(() => {
+                pinAuthError.classList.add('hidden');
+                pinStep1.classList.add('hidden');
+                pinStep2.classList.remove('hidden');
+                newAdminPin.focus();
+            })
+            .catch((error) => {
+                console.error("Reauth Error", error);
+                pinAuthError.textContent = 'Invalid Password. Please try again.';
+                pinAuthError.classList.remove('hidden');
+            });
+    });
+
+    document.getElementById('submitNewPinBtn').addEventListener('click', () => {
+        const pin = newAdminPin.value;
+        if (!/^\d{4}$/.test(pin)) {
+            newPinError.classList.remove('hidden');
+            return;
+        }
+        newPinError.classList.add('hidden');
+        pinStep2.classList.add('hidden');
+        pinStep3.classList.remove('hidden');
+        confirmAdminPin.focus();
+    });
+
+    document.getElementById('submitConfirmPinBtn').addEventListener('click', () => {
+        const pin1 = newAdminPin.value;
+        const pin2 = confirmAdminPin.value;
+
+        if (pin1 !== pin2) {
+            confirmPinError.classList.remove('hidden');
+            return;
+        }
+        confirmPinError.classList.add('hidden');
+
+        ADMIN_PIN = pin1;
+        saveSettingsToCloud();
+
+        pinStep3.classList.add('hidden');
+        pinStep4.classList.remove('hidden');
+    });
+
+    document.getElementById('finishPinBtn').addEventListener('click', closeChangePinModal);
 }
 
 // Authentication logic
@@ -470,10 +575,59 @@ function handleSignIn() {
 
     fullNameInput.value = '';
     renderActiveSessions();
+    showToast(`Welcome ${name}`);
+
+    // V52: Play Success Chime
+    const sound = document.getElementById('signInChime');
+    if (sound) {
+        sound.currentTime = 0;
+        sound.play().catch(e => console.log("Audio play blocked:", e));
+    }
+}
+
+// Toast Notification Logic
+function showToast(message) {
+    const toast = document.getElementById('toastNotification');
+    const toastMsg = document.getElementById('toastMessage');
+
+    toastMsg.textContent = message;
+    toast.classList.remove('hidden');
+
+    // Slight delay to allow display:block to render before transitioning opacity
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 10);
+
+    // Hide after 3 seconds
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.classList.add('hidden'), 400); // Wait for transition out
+    }, 3000);
+}
+
+// Manual Sign Out
+function handleManualSignOut() {
+    const name = fullNameInput.value.trim();
+    if (!name) return;
+
+    const sessionIndex = activeSessions.findIndex(s => s.name.toLowerCase() === name.toLowerCase());
+    const signInErrorEl = document.getElementById('signInError');
+
+    if (sessionIndex !== -1) {
+        const sessionId = activeSessions[sessionIndex].id;
+        handleSignOut(sessionId); // Chime will play here
+        fullNameInput.value = '';
+        showToast(`Goodbye ${name}`);
+    } else {
+        signInErrorEl.textContent = 'User not found in active sessions.';
+        signInErrorEl.style.color = "var(--danger)";
+        signInErrorEl.classList.remove('hidden');
+        setTimeout(() => signInErrorEl.classList.add('hidden'), 3000);
+    }
 }
 
 // Sign Out
-function handleSignOut(id) {
+function handleSignOut(id, silent = false) {
     const sessionIndex = activeSessions.findIndex(s => s.id === id);
     if (sessionIndex === -1) return;
 
@@ -497,6 +651,15 @@ function handleSignOut(id) {
 
     renderActiveSessions();
     renderAttendance();
+
+    // V52: Play Sign-out Chime if not silent
+    if (!silent) {
+        const sound = document.getElementById('signOutChime');
+        if (sound) {
+            sound.currentTime = 0;
+            sound.play().catch(e => console.log("Audio play blocked:", e));
+        }
+    }
 }
 
 // Name Suggestion Logic
@@ -516,9 +679,13 @@ function handleNameInput() {
     const activeNames = activeSessions.map(s => s.name.toLowerCase());
     console.log('V6: Input:', input, 'SystemMembers Count:', systemMembers.length, 'ActiveNames:', activeNames);
 
-    // Only suggest members who are ACTIVE and NOT already signed in
+    // Suggest ACTIVE members. When in Privacy Mode, we also suggest signed-in members so they can sign out.
     const matches = systemMembers
-        .filter(m => m.status === 'active' && !activeNames.includes(m.name.toLowerCase()))
+        .filter(m => {
+            if (m.status !== 'active') return false;
+            if (isPrivacyModeEnabled) return true;
+            return !activeNames.includes(m.name.toLowerCase());
+        })
         .map(m => m.name)
         .filter(name => name.toLowerCase().includes(input))
         .slice(0, 5);
@@ -550,13 +717,29 @@ function renderActiveSessions() {
     activeSessionsList.innerHTML = '';
     activeCountEl.textContent = activeSessions.length;
 
+    // V51 Privacy Mode Interceptor
+    if (isPrivacyModeEnabled) {
+        manualSignOutBtn.classList.remove('hidden');
+        if (activeSessions.length === 0) {
+            noActiveEl.style.display = 'block';
+        } else {
+            noActiveEl.style.display = 'none';
+        }
+        return; // Halt rendering of the actual tiles
+    } else {
+        manualSignOutBtn.classList.add('hidden');
+    }
+
     if (activeSessions.length === 0) {
         noActiveEl.style.display = 'block';
     } else {
         noActiveEl.style.display = 'none';
     }
 
-    activeSessions.forEach(session => {
+    // Sort alphabetically by name before generating the DOM elements
+    const sortedSessions = [...activeSessions].sort((a, b) => a.name.localeCompare(b.name));
+
+    sortedSessions.forEach(session => {
         const card = document.createElement('div');
         card.className = 'active-card';
         card.innerHTML = `
@@ -671,6 +854,17 @@ function lockAdmin() {
 function switchTab(tabId) {
     tabBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId));
     tabContents.forEach(content => content.classList.toggle('active', content.id === `tab-${tabId}`));
+
+    // Re-populate dynamic dropdowns whenever we switch to a relevant tab,
+    // ensuring Firebase data is always fresh (Firebase is async so init-time
+    // calls may happen before data arrives)
+    if (tabId === 'settings') {
+        populateMemberFilter();
+    } else if (tabId === 'members') {
+        renderMembers();
+    } else if (tabId === 'reports') {
+        populateReportTargetMembers();
+    }
 }
 
 // Settings Logic
@@ -679,16 +873,18 @@ function loadSettings() {
     timezoneSelect.value = selectedTimezone;
     autoSignOutToggle.checked = autoSignOutConfig.enabled;
     autoSignOutTime.value = autoSignOutConfig.time;
+    privacyModeToggle.checked = isPrivacyModeEnabled;
     renderRules();
 }
 
 function saveSettings() {
     welcomeMessage = welcomeMsgInput.value.trim();
     selectedTimezone = timezoneSelect.value;
-    // Reset today's trigger flag if the time fundamentally changed so they can test/execute it immediately
-    if (autoSignOutTime.value !== (autoSignOutConfig.time || '')) {
+    isPrivacyModeEnabled = privacyModeToggle.checked;
+
+    // Reset today's trigger flag if the configuration fundamentally changed so they can test/execute it immediately
+    if (autoSignOutTime.value !== (autoSignOutConfig.time || '') || autoSignOutToggle.checked !== autoSignOutConfig.enabled) {
         lastAutoSignoutDate = '';
-        saveSettingsToCloud();
     }
 
     autoSignOutConfig = {
@@ -697,11 +893,8 @@ function saveSettings() {
     };
 
     saveSettingsToCloud();
-    saveSettingsToCloud();
-    saveSettingsToCloud();
 
     updateClock();
-    // alert('Settings saved successfully!'); // Removed for auto-save
 }
 
 function checkAutoSignOut() {
@@ -736,7 +929,15 @@ function checkAutoSignOut() {
         if (activeSessions.length > 0) {
             console.log('Auto Sign-out boundary reached at', `${hourStr}:${minuteStr}`);
             const sessionsToSignOut = [...activeSessions];
-            sessionsToSignOut.forEach(session => handleSignOut(session.id));
+            // V52: Sign out silently to avoid sound stacking
+            sessionsToSignOut.forEach(session => handleSignOut(session.id, true));
+
+            // V52: Play a single chime for the entire batch
+            const sound = document.getElementById('signOutChime');
+            if (sound) {
+                sound.currentTime = 0;
+                sound.play().catch(e => console.log("Audio play blocked:", e));
+            }
         }
         // Mark as triggered so anyone signing in natively AFTER the cutoff isn't instantly kicked out
         lastAutoSignoutDate = dateKey;
@@ -1282,18 +1483,18 @@ window.updateMemberType = function (name, newType) {
 function populateMemberFilter() {
     // 1. Populate Schedule Rules specific target multi-select
     const ruleTargetDropdown = document.getElementById('ruleTargetDropdown');
-    const ruleTargetBtn = document.getElementById('ruleTargetBtn');
     if (ruleTargetDropdown) {
         ruleTargetDropdown.innerHTML = `
             <label class="multi-select-label">
                 <input type="checkbox" value="all" checked onchange="handleMultiSelectChange('ruleTargetContainer')"> All members
             </label>
         `;
+        // Show ALL active members (both Member and Guest roles) so no one is missed
         systemMembers.filter(m => {
+            if (!m || !m.name) return false;
             const mStatus = m.status || (m.deleted ? 'archived' : 'active');
-            const mRole = m.role || m.type || 'guest';
-            return mStatus === 'active' && mRole === 'member';
-        }).forEach(m => {
+            return mStatus === 'active';
+        }).sort((a, b) => a.name.localeCompare(b.name)).forEach(m => {
             const label = document.createElement('label');
             label.className = 'multi-select-label';
             label.innerHTML = `<input type="checkbox" value="${m.name}" onchange="handleMultiSelectChange('ruleTargetContainer')"> ${m.name}`;
@@ -1353,7 +1554,7 @@ window.populateReportTargetMembers = function () {
         });
     }
 
-    availableProfiles.sort((a, b) => a.name.localeCompare(b.name)).forEach(m => {
+    availableProfiles.filter(m => m && m.name).sort((a, b) => a.name.localeCompare(b.name)).forEach(m => {
         const label = document.createElement('label');
         label.className = 'multi-select-label';
         label.innerHTML = `<input type="checkbox" value="${m.name}" onchange="handleMultiSelectChange('reportMemberContainer')"> ${m.name}`;
@@ -1725,6 +1926,14 @@ function exportReport() {
 // Global exposure for onclick
 window.removeMember = removeMember;
 window.editMemberName = editMemberName;
+window.closeChangePinModal = closeChangePinModal;
+
+function closeChangePinModal() {
+    changePinOverlay.classList.remove('visible');
+    setTimeout(() => {
+        changePinOverlay.classList.add('hidden');
+    }, 300);
+}
 
 // Boot
 init();
