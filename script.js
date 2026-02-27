@@ -210,6 +210,12 @@ function attachCloudListeners(uid) {
             ADMIN_PIN = data.adminPin || '0000';
             isPrivacyModeEnabled = data.isPrivacyModeEnabled || false;
 
+            // V55: Explicitly force 0000 into the cloud if it was missing 
+            // (New accounts already trigger the else block below)
+            if (!data.adminPin) {
+                saveSettingsToCloud();
+            }
+
             welcomeMsgInput.value = welcomeMessage;
             timezoneSelect.value = selectedTimezone;
             autoSignOutToggle.checked = autoSignOutConfig.enabled;
