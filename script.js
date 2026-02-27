@@ -1956,14 +1956,11 @@ init();
 
 // --- V55 ONE-OFF HISTORICAL DATA IMPORT ---
 setTimeout(() => {
-    if (localStorage.getItem('v55_data_import_done')) return;
     auth.onAuthStateChanged(async (user) => {
         if (!user) return;
 
         // V55.1: strict lock to Craigieburn account only
         if (user.email !== 'craigieburn@ses.vic.gov.au') return;
-
-        if (localStorage.getItem('v55_data_import_done')) return;
 
         console.log("Starting Historical Data Import for user", user.uid);
         localStorage.setItem('v55_data_import_done', 'true');
