@@ -132,6 +132,16 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+
+// V53: Enable Offline Persistence
+db.enablePersistence()
+    .catch(function (err) {
+        if (err.code == 'failed-precondition') {
+            console.log("Multiple tabs open, persistence can only be enabled in one tab at a a time.");
+        } else if (err.code == 'unimplemented') {
+            console.log("The current browser does not support all of the features required to enable persistence.");
+        }
+    });
 // -------------------------------
 
 // State

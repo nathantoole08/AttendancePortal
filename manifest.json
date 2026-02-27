@@ -1,0 +1,16 @@
+{
+    "name": "VICSES Attendance",
+    "short_name": "Attendance",
+    "description": "VICSES Attendance and Training Tracker",
+    "start_url": "/index.html",
+    "display": "standalone",
+    "background_color": "#1a1a2e",
+    "theme_color": "#ff5c00",
+    "icons": [
+        {
+            "src": "assets/vicses-logo.png",
+            "sizes": "192x192 512x512",
+            "type": "image/png"
+        }
+    ]
+}
