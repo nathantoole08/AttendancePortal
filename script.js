@@ -278,17 +278,24 @@ function init() {
             loginView.classList.add('hidden');
             mainView.classList.remove('hidden');
 
-            // V56: Dynamic Profile Naming
+            // V56 & V57: Dynamic Profile Naming
             if (user.email) {
                 const prefix = user.email.split('@')[0];
                 const capitalizedName = prefix.charAt(0).toUpperCase() + prefix.slice(1).toLowerCase();
-                const unitTitle = `${capitalizedName} SES`;
+                const unitTitle = `${capitalizedName}`;
 
                 // Set the admin dashboard title
                 const adminTitleNode = document.getElementById('unitProfileNameDisplay');
                 if (adminTitleNode) {
-                    adminTitleNode.innerHTML = `${unitTitle} <span>Admin Dashboard</span>`;
+                    adminTitleNode.innerHTML = `${unitTitle} SES <span>Admin Dashboard</span>`;
                 }
+
+                // V57: Set the Profile Settings Modal text
+                const profileNameNode = document.getElementById('profileNameDisplay');
+                if (profileNameNode) profileNameNode.textContent = unitTitle;
+
+                const profileEmailNode = document.getElementById('profileEmailDisplay');
+                if (profileEmailNode) profileEmailNode.textContent = user.email;
             }
 
             attachCloudListeners(user.uid);
