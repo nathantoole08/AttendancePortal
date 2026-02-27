@@ -1,4 +1,4 @@
-const CACHE_NAME = 'vicses-attendance-v1';
+const CACHE_NAME = 'vicses-attendance-v58';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
@@ -11,14 +11,16 @@ const ASSETS_TO_CACHE = [
 ];
 
 self.addEventListener('install', (event) => {
+    // Force the waiting service worker to become the active service worker
+    self.skipWaiting();
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then((cache) => cache.addAll(ASSETS_TO_CACHE))
-            .then(() => self.skipWaiting())
     );
 });
 
 self.addEventListener('activate', (event) => {
+    // Tell the active service worker to take control of the page immediately
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
@@ -33,31 +35,39 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-    // Only cache GET requests
+    // Only intercept GET requests
     if (event.request.method !== 'GET') return;
 
-    // Don't intercept Firebase API/Auth calls
+    // Don't intercept Firebase API/Auth calls or Chrome Extensions
     if (event.request.url.includes('firestore.googleapis.com') ||
-        event.request.url.includes('identitytoolkit.googleapis.com')) {
+        event.request.url.includes('identitytoolkit.googleapis.com') ||
+        event.request.url.startsWith('chrome-extension')) {
         return;
     }
 
     event.respondWith(
-        caches.match(event.request)
-            .then((response) => {
-                // Return cached version or fetch from network
-                return response || fetch(event.request).then((fetchResponse) => {
-                    return caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(event.request, fetchResponse.clone());
-                        return fetchResponse;
+        fetch(event.request)
+            .then((networkResponse) => {
+                // Network First - always try to get the freshest data
+                if (networkResponse && networkResponse.status === 200) {
+                    const responseClone = networkResponse.clone();
+                    caches.open(CACHE_NAME).then((cache) => {
+                        cache.put(event.request, responseClone);
                     });
-                });
+                }
+                return networkResponse;
             })
             .catch(() => {
-                // Fallback for offline if not in cache
-                if (event.request.mode === 'navigate') {
-                    return caches.match('/index.html');
-                }
+                // Fallback to Cache only if offline/network fails
+                return caches.match(event.request).then((cachedResponse) => {
+                    if (cachedResponse) {
+                        return cachedResponse;
+                    }
+                    // Final fallback for purely offline navigation
+                    if (event.request.mode === 'navigate') {
+                        return caches.match('/index.html');
+                    }
+                });
             })
     );
 });
