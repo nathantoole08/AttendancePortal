@@ -277,14 +277,40 @@ function init() {
             // User is signed in.
             loginView.classList.add('hidden');
             mainView.classList.remove('hidden');
+
+            // V56: Dynamic Profile Naming
+            if (user.email) {
+                const prefix = user.email.split('@')[0];
+                const capitalizedName = prefix.charAt(0).toUpperCase() + prefix.slice(1).toLowerCase();
+                const unitTitle = `${capitalizedName} SES`;
+
+                // Set the admin dashboard title
+                const adminTitleNode = document.getElementById('unitProfileNameDisplay');
+                if (adminTitleNode) {
+                    adminTitleNode.innerHTML = `${unitTitle} <span>Admin Dashboard</span>`;
+                }
+            }
+
             attachCloudListeners(user.uid);
         } else {
             // User is signed out.
             loginView.classList.remove('hidden');
             mainView.classList.add('hidden');
+
             // Unsubscribe listeners when logged out
             unsubscribes.forEach(unsub => unsub());
             unsubscribes = [];
+
+            // V56: Local Memory Flush (Fix Data Bleed)
+            activeSessions = [];
+            attendanceData = [];
+            systemMembers = [];
+            scheduleRules = [];
+
+            renderActiveSessions();
+            renderAttendance();
+            renderMembers();
+            if (typeof renderRules === 'function') renderRules();
         }
     });
 
