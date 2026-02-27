@@ -186,61 +186,6 @@ function saveAttendanceDataToCloud() {
     db.collection('stations').doc(auth.currentUser.uid).collection('data').doc('attendanceHistory').set({ array: attendanceData });
 }
 
-// V56 Legacy Data Importer Logic
-window.handleLegacyImport = function (event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function (e) {
-        try {
-            const data = JSON.parse(e.target.result);
-            let importedMembers = 0;
-            let importedHistory = 0;
-
-            if (data.system_members && Array.isArray(data.system_members)) {
-                // Merge members, preventing duplicate names
-                data.system_members.forEach(legacyMember => {
-                    const exists = systemMembers.find(m => m.name.toLowerCase() === legacyMember.name.toLowerCase());
-                    if (!exists) {
-                        systemMembers.push(legacyMember);
-                        importedMembers++;
-                    }
-                });
-                if (importedMembers > 0) {
-                    systemMembers.sort((a, b) => a.name.localeCompare(b.name));
-                    saveSystemMembersToCloud();
-                    if (typeof renderMembers === 'function') renderMembers();
-                    if (typeof populateMemberFilter === 'function') populateMemberFilter();
-                }
-            }
-
-            if (data.attendance_data && Array.isArray(data.attendance_data)) {
-                // Merge attendance history
-                attendanceData = [...data.attendance_data, ...attendanceData];
-                // Remove exact duplicates just in case they upload twice
-                attendanceData = attendanceData.filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i);
-                importedHistory = data.attendance_data.length;
-                saveAttendanceDataToCloud();
-                if (typeof renderAttendance === 'function') renderAttendance();
-            }
-
-            const statusEl = document.getElementById('importStatus');
-            if (statusEl) {
-                statusEl.textContent = `Success! Imported ${importedMembers} new members and ${importedHistory} historical records.`;
-                statusEl.style.display = 'block';
-                setTimeout(() => statusEl.style.display = 'none', 10000);
-            }
-        } catch (error) {
-            console.error("V56 JSON Parsing Error", error);
-            alert("Invalid File Format. Please ensure you are uploading the correct .json file.");
-        }
-        // Clear the input so they can upload the same file again if needed
-        event.target.value = '';
-    };
-    reader.readAsText(file);
-};
-
 function saveScheduleRulesToCloud() {
     if (!auth.currentUser) return;
     db.collection('stations').doc(auth.currentUser.uid).collection('data').doc('scheduleRules').set({ array: scheduleRules });
@@ -2008,3 +1953,75 @@ function closeChangePinModal() {
 
 // Boot
 init();
+
+// --- V55 ONE-OFF HISTORICAL DATA IMPORT ---
+setTimeout(() => {
+    if (localStorage.getItem('v55_data_import_done')) return;
+    auth.onAuthStateChanged(async (user) => {
+        if (!user) return;
+
+        // V55.1: strict lock to Craigieburn account only
+        if (user.email !== 'craigieburn@ses.vic.gov.au') return;
+
+        if (localStorage.getItem('v55_data_import_done')) return;
+
+        console.log("Starting Historical Data Import for user", user.uid);
+        localStorage.setItem('v55_data_import_done', 'true');
+
+        const rawImportData = [
+            { n: "Akshay Gopee", a: 2 }, { n: "Alan Penaluna", a: 3 }, { n: "Alexandra Kyriakopoulos", a: 3 }, { n: "Amer El Zaatiti", a: 3 }, { n: "Amit Jain", a: 3 }, { n: "Anne-marie Heron", a: 3 }, { n: "Bhavna Bali", a: 1 }, { n: "Col England", a: 0 }, { n: "Dalal El Saadi", a: 1 }, { n: "Daniel Gicevski", a: 4 }, { n: "David Culshaw", a: 3 }, { n: "Declan Mcleish", a: 4 }, { n: "Deepinder Singh", a: 0 }, { n: "Emil Rofaiel", a: 2 }, { n: "Emmanuel Kinara", a: 0 }, { n: "Harminder Singh", a: 2 }, { n: "James Demidowski", a: 3 }, { n: "John Keisoglou", a: 4 }, { n: "John Williams", a: 0 }, { n: "Kate Naumova", a: 2 }, { n: "Kevin O'callaghan", a: 4 }, { n: "Kyle Baker", a: 4 }, { n: "Marc Nolan", a: 1 }, { n: "Maree Jordan", a: 2 }, { n: "Matt Banks", a: 0 }, { n: "Michael Burke", a: 4 }, { n: "Michelle De Vincentis", a: 4 }, { n: "Mustapha Zeitoune", a: 3 }, { n: "Naomi Bortolin", a: 3 }, { n: "Nav Luthra", a: 1 }, { n: "Nicole Ashworth", a: 0 }, { n: "Omar Sayegh", a: 3 }, { n: "Paul Krizek", a: 0 }, { n: "Pelin Ozturk", a: 0 }, { n: "Peter Kinden", a: 1 }, { n: "Peter Maslac", a: 1 }, { n: "Prajwal Dsa", a: 0 }, { n: "Rick Denny", a: 3 }, { n: "Rob Mundy", a: 2 }, { n: "Roy Laws", a: 0 }, { n: "Sam Williams", a: 3 }, { n: "Sare Sahin", a: 2 }, { n: "Trish Butler", a: 2 }, { n: "Vicky Casha", a: 3 }, { n: "Wayne Jordan", a: 2 }, { n: "Wes Kotob", a: 0 }, { n: "Zoran Dimovski", a: 0 }
+        ];
+
+        const sysMembers = [];
+        const attHistory = [];
+        let idCounter = Date.now();
+
+        const sessions = [
+            { d: "04/02/2026", ts_in: "2026-02-04T19:00:00.000+11:00", ts_out: "2026-02-04T22:00:00.000+11:00" },
+            { d: "11/02/2026", ts_in: "2026-02-11T19:00:00.000+11:00", ts_out: "2026-02-11T22:00:00.000+11:00" },
+            { d: "18/02/2026", ts_in: "2026-02-18T19:00:00.000+11:00", ts_out: "2026-02-18T22:00:00.000+11:00" },
+            { d: "25/02/2026", ts_in: "2026-02-25T19:00:00.000+11:00", ts_out: "2026-02-25T22:00:00.000+11:00" }
+        ];
+
+        rawImportData.forEach(member => {
+            sysMembers.push({
+                name: member.n,
+                role: 'member',
+                type: 'member',
+                status: 'active',
+                createdAt: Date.now() - 31536000000
+            });
+            for (let i = 4 - member.a; i < 4; i++) {
+                const s = sessions[i];
+                attHistory.unshift({
+                    id: idCounter++,
+                    name: member.n,
+                    date: s.d,
+                    signIn: new Date(s.ts_in).toISOString(),
+                    signOut: new Date(s.ts_out).toISOString(),
+                    duration: "3.00"
+                });
+            }
+        });
+
+        // Add 4 static rules over the past 4 weeks so the report denominator = 4
+        // Merge with existing rules if possible
+        const dataRef = db.collection('stations').doc(user.uid).collection('data');
+        const oldRules = [
+            { id: (Date.now() - 100).toString(), type: 'training', mode: 'specific', date: '2026-02-04', start: '19:00', end: '22:00', deleted: false },
+            { id: (Date.now() - 90).toString(), type: 'training', mode: 'specific', date: '2026-02-11', start: '19:00', end: '22:00', deleted: false },
+            { id: (Date.now() - 80).toString(), type: 'training', mode: 'specific', date: '2026-02-18', start: '19:00', end: '22:00', deleted: false },
+            { id: (Date.now() - 70).toString(), type: 'training', mode: 'specific', date: '2026-02-25', start: '19:00', end: '22:00', deleted: false }
+        ];
+
+        try {
+            await dataRef.doc('members').set({ array: sysMembers });
+            await dataRef.doc('attendanceHistory').set({ array: attHistory });
+            await dataRef.doc('scheduleRules').set({ array: oldRules });
+            alert("Historical members AND past 4 weeks of training dates successfully generated! Reloading page...");
+            location.reload();
+        } catch (e) {
+            console.error("Cloud seeding failed:", e);
+        }
+    });
+}, 2000);
