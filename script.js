@@ -186,6 +186,61 @@ function saveAttendanceDataToCloud() {
     db.collection('stations').doc(auth.currentUser.uid).collection('data').doc('attendanceHistory').set({ array: attendanceData });
 }
 
+// V56 Legacy Data Importer Logic
+window.handleLegacyImport = function (event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        try {
+            const data = JSON.parse(e.target.result);
+            let importedMembers = 0;
+            let importedHistory = 0;
+
+            if (data.system_members && Array.isArray(data.system_members)) {
+                // Merge members, preventing duplicate names
+                data.system_members.forEach(legacyMember => {
+                    const exists = systemMembers.find(m => m.name.toLowerCase() === legacyMember.name.toLowerCase());
+                    if (!exists) {
+                        systemMembers.push(legacyMember);
+                        importedMembers++;
+                    }
+                });
+                if (importedMembers > 0) {
+                    systemMembers.sort((a, b) => a.name.localeCompare(b.name));
+                    saveSystemMembersToCloud();
+                    if (typeof renderMembers === 'function') renderMembers();
+                    if (typeof populateMemberFilter === 'function') populateMemberFilter();
+                }
+            }
+
+            if (data.attendance_data && Array.isArray(data.attendance_data)) {
+                // Merge attendance history
+                attendanceData = [...data.attendance_data, ...attendanceData];
+                // Remove exact duplicates just in case they upload twice
+                attendanceData = attendanceData.filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i);
+                importedHistory = data.attendance_data.length;
+                saveAttendanceDataToCloud();
+                if (typeof renderAttendance === 'function') renderAttendance();
+            }
+
+            const statusEl = document.getElementById('importStatus');
+            if (statusEl) {
+                statusEl.textContent = `Success! Imported ${importedMembers} new members and ${importedHistory} historical records.`;
+                statusEl.style.display = 'block';
+                setTimeout(() => statusEl.style.display = 'none', 10000);
+            }
+        } catch (error) {
+            console.error("V56 JSON Parsing Error", error);
+            alert("Invalid File Format. Please ensure you are uploading the correct .json file.");
+        }
+        // Clear the input so they can upload the same file again if needed
+        event.target.value = '';
+    };
+    reader.readAsText(file);
+};
+
 function saveScheduleRulesToCloud() {
     if (!auth.currentUser) return;
     db.collection('stations').doc(auth.currentUser.uid).collection('data').doc('scheduleRules').set({ array: scheduleRules });

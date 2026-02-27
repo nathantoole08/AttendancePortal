@@ -280,6 +280,26 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- V56 Legacy Data Import -->
+                            <div class="input-group"
+                                style="margin-top: 1.5rem; border-top: 1px solid var(--glass-border); padding-top: 1.5rem;">
+                                <label style="color: var(--warning);">System Data</label>
+                                <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1rem;">
+                                    Import legacy data from the offline iPad version. <strong>Warning:</strong> This
+                                    will merge with current data. Only do this once.
+                                </p>
+                                <input type="file" id="legacyDataImport" accept=".json" style="display: none;"
+                                    onchange="handleLegacyImport(event)">
+                                <button class="action-btn sign-out-sm"
+                                    onclick="document.getElementById('legacyDataImport').click()"
+                                    style="width: 100%; border: 1px solid var(--warning); color: var(--warning); background: transparent;">
+                                    Import Legacy .JSON
+                                </button>
+                                <div id="importStatus"
+                                    style="font-size: 0.875rem; color: var(--success); margin-top: 0.5rem; display: none;">
+                                    Import Successful!</div>
+                            </div>
                         </div>
                     </div>
                 </div>
