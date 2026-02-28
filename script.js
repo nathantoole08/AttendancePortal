@@ -632,6 +632,12 @@ function handleSignIn() {
         sound.currentTime = 0;
         sound.play().catch(e => console.log("Audio play blocked:", e));
     }
+
+    // V60: Auto-scroll to top so the input is ready for the next person
+    window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+    });
 }
 
 // Toast Notification Logic
