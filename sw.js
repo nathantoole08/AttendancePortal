@@ -1,4 +1,4 @@
-const CACHE_NAME = 'vicses-attendance-v61';
+const CACHE_NAME = 'vicses-attendance-v62';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',

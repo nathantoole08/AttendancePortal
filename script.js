@@ -676,14 +676,14 @@ function handleManualSignOut() {
 }
 
 // Sign Out
-function handleSignOut(id, silent = false) {
+function handleSignOut(id, silent = false, overrideSignOutTime = null) {
     const sessionIndex = activeSessions.findIndex(s => s.id === id);
     if (sessionIndex === -1) return;
 
     const session = activeSessions[sessionIndex];
-    const signOutTime = new Date();
+    const signOutTime = overrideSignOutTime || new Date();
     const signInTime = new Date(session.signIn);
-    const durationMs = signOutTime - signInTime;
+    const durationMs = Math.max(0, signOutTime - signInTime); // Prevent negative duration
     const durationHours = (durationMs / (1000 * 60 * 60)).toFixed(2);
 
     const completedSession = {
@@ -947,66 +947,46 @@ function saveSettings() {
 }
 
 function checkAutoSignOut() {
-    if (!autoSignOutConfig.enabled) return;
+    if (!autoSignOutConfig.enabled || !autoSignOutConfig.time) return;
+    if (activeSessions.length === 0) return;
 
     const now = new Date();
+    const [cfgHour, cfgMinute] = autoSignOutConfig.time.split(':').map(Number);
+    const sessionsToSignOut = [];
 
-    // Use en-GB to guarantee consistent 24-hour "HH:mm:ss" format regardless of the platform
-    const timeString = now.toLocaleTimeString('en-GB', {
-        timeZone: selectedTimezone,
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
+    // V62: Deterministic Mathematical Sign-Out
+    // Evaluate every active session individually to calculate its exact intended sign-out target.
+    activeSessions.forEach(session => {
+        const signInDate = new Date(session.signIn);
+
+        // Calculate what the target time *would* be on the day they signed in
+        let target = new Date(signInDate);
+        target.setHours(cfgHour, cfgMinute, 0, 0);
+
+        // If this target is BEFORE or EQUAL to their sign-in time, 
+        // their actual auto-sign-out target is that time on the NEXT day.
+        if (target <= signInDate) {
+            target.setDate(target.getDate() + 1);
+        }
+
+        // If the current time has mathematically passed their specific target line, bag them for sign-out.
+        if (now >= target) {
+            sessionsToSignOut.push({ id: session.id, targetTime: target });
+        }
     });
 
-    const [hourStr, minuteStr] = timeString.split(':');
-    let parsedHour = parseInt(hourStr, 10);
-    // Handle the 24:00 midnight edge case
-    if (parsedHour === 24) parsedHour = 0;
-
-    const currentTotalMinutes = parsedHour * 60 + parseInt(minuteStr, 10);
-    const [cfgHour, cfgMinute] = (autoSignOutConfig.time || '23:00').split(':').map(Number);
-    const cfgTotalMinutes = cfgHour * 60 + cfgMinute;
-
-    const dateKey = now.toLocaleDateString('en-GB', { timeZone: selectedTimezone });
-
-    // --- DIAGNOSTIC LOG (To prove exactly what the script is doing every 60 seconds) ---
-    console.log(`[Auto Sign-Out] Current: ${parsedHour}:${minuteStr} (${currentTotalMinutes}m) | Target: ${cfgHour}:${cfgMinute} (${cfgTotalMinutes}m) | Stale Date Flag: ${lastAutoSignoutDate === dateKey ? 'BLOCKED TODAY' : 'CLEAR'}`);
-
-    // Primary Auto Sign-Out Boundary (Catches normal cases and asleep browsers waking up same-day)
-    if (currentTotalMinutes >= cfgTotalMinutes && lastAutoSignoutDate !== dateKey) {
-        if (activeSessions.length > 0) {
-            console.log('Auto Sign-out boundary reached at', `${hourStr}:${minuteStr}`);
-            const sessionsToSignOut = [...activeSessions];
-            // V52: Sign out silently to avoid sound stacking
-            sessionsToSignOut.forEach(session => handleSignOut(session.id, true));
-
-            // V52: Play a single chime for the entire batch
-            const sound = document.getElementById('signOutChime');
-            if (sound) {
-                sound.currentTime = 0;
-                sound.play().catch(e => console.log("Audio play blocked:", e));
-            }
-        }
-        // Mark as triggered so anyone signing in natively AFTER the cutoff isn't instantly kicked out
-        lastAutoSignoutDate = dateKey;
-        saveSettingsToCloud();
-    }
-
-    // Safety fallback: Cross-day sleepers (if browser was asleep for days and wakes up before cfg time)
-    if (activeSessions.length > 0) {
-        const sessionsToSignOut = [...activeSessions];
-        sessionsToSignOut.forEach(session => {
-            const sessionDate = new Date(session.signIn);
-            const durationHours = (now - sessionDate) / (1000 * 60 * 60);
-            const sessionDateKey = sessionDate.toLocaleDateString('en-GB', { timeZone: selectedTimezone });
-
-            // If they are from a previous day AND have been active for over 14 hours
-            if (sessionDateKey !== dateKey && durationHours > 14) {
-                console.log('Auto Sign-out fallback triggered for stale session:', session.name);
-                handleSignOut(session.id);
-            }
+    if (sessionsToSignOut.length > 0) {
+        sessionsToSignOut.forEach(s => {
+            console.log(`[Auto Sign-Out] Retroactively signing out ${s.id} at exactly ${s.targetTime}`);
+            handleSignOut(s.id, true, s.targetTime);
         });
+
+        // V52: Play a single chime for the entire batch
+        const sound = document.getElementById('signOutChime');
+        if (sound) {
+            sound.currentTime = 0;
+            sound.play().catch(e => console.log("Audio play blocked:", e));
+        }
     }
 }
 
