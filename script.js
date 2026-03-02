@@ -259,6 +259,31 @@ function attachCloudListeners(uid) {
 
     unsubscribes.push(dataRef.doc('attendanceHistory').onSnapshot(doc => {
         attendanceData = doc.exists ? doc.data().array : [];
+
+        // V63: Auto-Sanitize Corrupted Cloud Data (historical iOS sleep bug)
+        let needsSanitization = false;
+        attendanceData.forEach(session => {
+            if (parseFloat(session.duration) > 16) {
+                needsSanitization = true;
+                const signInDate = new Date(session.signIn);
+                let target = new Date(signInDate);
+                const fallbackTime = (typeof autoSignOutConfig !== 'undefined' && autoSignOutConfig.time) ? autoSignOutConfig.time : "02:00";
+                const [cfgHour, cfgMinute] = fallbackTime.split(':').map(Number);
+                target.setHours(cfgHour, cfgMinute, 0, 0);
+                if (target <= signInDate) {
+                    target.setDate(target.getDate() + 1);
+                }
+                session.signOut = target.toISOString();
+                const updatedDurationMs = Math.max(0, target - signInDate);
+                session.duration = (updatedDurationMs / (1000 * 60 * 60)).toFixed(2);
+                console.log(`[V63 Auto-Sanitize] Fixed ${session.name} cross-day session. Duration is now ${session.duration} hours.`);
+            }
+        });
+
+        if (needsSanitization) {
+            saveAttendanceDataToCloud();
+        }
+
         renderAttendance();
     }));
 
@@ -1705,12 +1730,22 @@ function renderTrainingReport(data, selectedTargets = [], filterAll = true, stat
         const logTimeStart = dt.getHours() * 60 + dt.getMinutes();
 
         const dtOut = new Date(session.signOut || session.signIn);
-        const logTimeEnd = dtOut.getHours() * 60 + dtOut.getMinutes();
+        let logTimeEnd = dtOut.getHours() * 60 + dtOut.getMinutes();
+
+        // V63: Handle cross-day overlaps mathematically (if sign-out was next day)
+        if (dtOut.getDate() !== dt.getDate() || dtOut.getMonth() !== dt.getMonth() || dtOut.getFullYear() !== dt.getFullYear()) {
+            logTimeEnd += 1440; // Add 24 hours to the end bound
+        }
 
         const [startH, startM] = (rule.start || "18:30").split(':').map(Number);
         const [endH, endM] = (rule.end || "21:30").split(':').map(Number);
         const rangeStart = startH * 60 + startM;
-        const rangeEnd = endH * 60 + endM;
+        let rangeEnd = endH * 60 + endM;
+
+        // V63: If a training rule supposedly goes past midnight, its rangeEnd would be logically smaller.
+        if (rangeEnd < rangeStart) {
+            rangeEnd += 1440;
+        }
 
         return logTimeStart <= rangeEnd && logTimeEnd >= rangeStart;
     };
@@ -1867,11 +1902,23 @@ function exportReport() {
             const dt = new Date(session.signIn);
             const logTimeStart = dt.getHours() * 60 + dt.getMinutes();
             const dtOut = new Date(session.signOut || session.signIn);
-            const logTimeEnd = dtOut.getHours() * 60 + dtOut.getMinutes();
+            let logTimeEnd = dtOut.getHours() * 60 + dtOut.getMinutes();
+
+            // V63: Handle cross-day overlaps mathematically (if sign-out was next day)
+            if (dtOut.getDate() !== dt.getDate() || dtOut.getMonth() !== dt.getMonth() || dtOut.getFullYear() !== dt.getFullYear()) {
+                logTimeEnd += 1440;
+            }
+
             const [startH, startM] = (rule.start || "18:30").split(':').map(Number);
             const [endH, endM] = (rule.end || "21:30").split(':').map(Number);
             const rangeStart = startH * 60 + startM;
-            const rangeEnd = endH * 60 + endM;
+            let rangeEnd = endH * 60 + endM;
+
+            // V63: If a training rule supposedly goes past midnight, its rangeEnd would be logically smaller.
+            if (rangeEnd < rangeStart) {
+                rangeEnd += 1440;
+            }
+
             return logTimeStart <= rangeEnd && logTimeEnd >= rangeStart;
         };
 
