@@ -284,12 +284,6 @@ function init() {
                 const capitalizedName = prefix.charAt(0).toUpperCase() + prefix.slice(1).toLowerCase();
                 const unitTitle = `${capitalizedName}`;
 
-                // Set the admin dashboard title
-                const adminTitleNode = document.getElementById('unitProfileNameDisplay');
-                if (adminTitleNode) {
-                    adminTitleNode.innerHTML = `${unitTitle} SES <span>Admin Dashboard</span>`;
-                }
-
                 // V57: Set the Profile Settings Modal text
                 const profileNameNode = document.getElementById('profileNameDisplay');
                 if (profileNameNode) profileNameNode.textContent = unitTitle;
