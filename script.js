@@ -700,6 +700,10 @@ function handleManualSignOut() {
         handleSignOut(sessionId); // Chime will play here
         fullNameInput.value = '';
         showToast(`Goodbye ${name}`);
+
+        // V65: iPad Keyboard Auto-Scroll Fix (Sign Out)
+        if (document.activeElement) document.activeElement.blur();
+        setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 350);
     } else {
         signInErrorEl.textContent = 'User not found in active sessions.';
         signInErrorEl.style.color = "var(--danger)";
