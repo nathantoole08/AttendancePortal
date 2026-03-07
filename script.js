@@ -652,11 +652,19 @@ function handleSignIn() {
         sound.play().catch(e => console.log("Audio play blocked:", e));
     }
 
-    // V60: Auto-scroll to top so the input is ready for the next person
-    window.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-    });
+    // V64: iPad Keyboard Auto-Scroll Fix
+    // 1. Force the keyboard to close immediately
+    if (document.activeElement) {
+        document.activeElement.blur();
+    }
+
+    // 2. Wait for iOS to finish its layout recalculation, then scroll to top
+    setTimeout(() => {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    }, 350);
 }
 
 // Toast Notification Logic
