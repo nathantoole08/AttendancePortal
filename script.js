@@ -603,7 +603,18 @@ function handleSignIn() {
     };
 
     activeSessions.push(newSession);
-    saveActiveSessionsToCloud();
+    
+    // V66: Atomic Append
+    if (auth.currentUser) {
+        db.collection('stations').doc(auth.currentUser.uid).collection('data').doc('activeSessions')
+            .update({
+                array: firebase.firestore.FieldValue.arrayUnion(newSession)
+            }).catch(err => {
+                if (err.code === 'not-found') {
+                    db.collection('stations').doc(auth.currentUser.uid).collection('data').doc('activeSessions').set({ array: [newSession] });
+                }
+            });
+    }
 
     // Check if the member already exists in the system
     const existingMember = systemMembers.find(m => m.name.toLowerCase() === name.toLowerCase());
@@ -730,10 +741,25 @@ function handleSignOut(id, silent = false, overrideSignOutTime = null) {
     };
 
     attendanceData.unshift(completedSession);
-    saveAttendanceDataToCloud();
-
     activeSessions.splice(sessionIndex, 1);
-    saveActiveSessionsToCloud();
+
+    // V66: Atomic Synchronisation
+    if (auth.currentUser) {
+        const uid = auth.currentUser.uid;
+        const stationRef = db.collection('stations').doc(uid).collection('data');
+
+        stationRef.doc('activeSessions').update({
+            array: firebase.firestore.FieldValue.arrayRemove(session)
+        }).catch(e => console.error("Remove Active Session Error:", e));
+
+        stationRef.doc('attendanceHistory').update({
+            array: firebase.firestore.FieldValue.arrayUnion(completedSession)
+        }).catch(e => {
+            if (e.code === 'not-found') {
+                stationRef.doc('attendanceHistory').set({ array: [completedSession] });
+            }
+        });
+    }
 
     renderActiveSessions();
     renderAttendance();
